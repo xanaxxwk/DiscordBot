@@ -6,6 +6,8 @@ from concurrent.futures import ThreadPoolExecutor
 import logging
 import random
 import aiohttp
+from discord.ui import Button, View
+from discord import ButtonStyle
 
 
 # Configurações do bot
@@ -79,26 +81,73 @@ queue = []
 loop_queue = False
 
 # Executor para multithreading
-executor = ThreadPoolExecutor(max_workers=4)
+executor = ThreadPoolExecutor(max_workers=64)
 
 # Configuração de logs
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Painel de Controle com botões
+class MusicControlView(discord.ui.View):
+    def __init__(self, ctx):
+        super().__init__()
+        self.ctx = ctx
+
+    @discord.ui.button(label='⏯️ Play/Pause', style=discord.ButtonStyle.green)
+    async def play_pause(self, button: discord.ui.Button, interaction: discord.Interaction):
+        vc = self.ctx.voice_client
+        if vc.is_paused():
+            vc.resume()
+            await interaction.response.send_message("▶️ Música retomada!", ephemeral=True)
+        elif vc.is_playing():
+            vc.pause()
+            await interaction.response.send_message("⏸️ Música pausada!", ephemeral=True)
+
+    @discord.ui.button(label='⏭️ Pular', style=discord.ButtonStyle.blurple)
+    async def skip(self, button: discord.ui.Button, interaction: discord.Interaction):
+        vc = self.ctx.voice_client
+        if vc.is_playing():
+            vc.stop()
+            await interaction.response.send_message("⏭️ Música pulada!", ephemeral=True)
+
+    @discord.ui.button(label='⏹️ Parar', style=discord.ButtonStyle.red)
+    async def stop(self, button: discord.ui.Button, interaction: discord.Interaction):
+        vc = self.ctx.voice_client
+        if vc.is_playing():
+            vc.stop()
+            await vc.disconnect()
+            await interaction.response.send_message("⏹️ Música parada e desconectado do canal de voz!", ephemeral=True)
+
 # Comando para tocar música
 @bot.command(name='play', help='Toca uma música do YouTube. Use o comando: !play <nome da música>')
 async def play(ctx, *, query: str):
     try:
+        if not ctx.author.voice:
+            await ctx.send("Você precisa estar em um canal de voz para tocar música!")
+            return
+
         if not ctx.voice_client:
             channel = ctx.author.voice.channel
             await channel.connect()
+
         async with ctx.typing():
             player = await YTDLSource.from_query(query, loop=bot.loop, stream=True)
             ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop) if not e else None)
-        await ctx.send(f'Agora tocando: {player.title}')
+
+        await ctx.send(f'Agora tocando: {player.title}', view=MusicControlView(ctx))
+
     except Exception as e:
-        await ctx.send(f'Ocorreu um erro: você não está em um canal de voz, tapado')
-        logger.error(f'Erro ao tentar tocar música: {e}')
+        await ctx.send("Ocorreu um erro ao tentar tocar música.")
+        print(f'Erro ao tentar tocar música: {e}')
+
+# Comando para sair do canal de voz
+@bot.command(name='leave', help='Desconecta o bot do canal de voz.')
+async def leave(ctx):
+    if not ctx.voice_client:
+        return await ctx.send("Não estou conectado a um canal de voz.")
+    
+    await ctx.voice_client.disconnect()
+    await ctx.send("Bot desconectado do canal de voz.")
 
 # Comando para pausar a música
 @bot.command(name='pause', help='Pausa a música que está tocando')
@@ -359,6 +408,8 @@ async def announce(ctx, channel: discord.TextChannel, *, message: str):
     await channel.send(message)
     await ctx.send(f'Anúncio enviado para {channel.mention}')
 
+
+
 # Sistema de Boas-vindas
 @bot.event
 async def on_member_join(member):
@@ -434,9 +485,12 @@ async def poll(ctx, question: str, *options: str):
 # Comando de Temporizador
 @bot.command(name='timer', help='Define um temporizador. Use o comando: !timer <tempo em segundos>')
 async def timer(ctx, seconds: int):
-    await ctx.send(f'Temporizador definido para {seconds} segundos.')
+    if seconds < 1:
+        await ctx.send("O tempo deve ser maior que 0 segundos.")
+        return
+    await ctx.send(f"Temporizador definido para {seconds} segundos.")
     await asyncio.sleep(seconds)
-    await ctx.send(f'Temporizador de {seconds} segundos terminou!')
+    await ctx.send(f"{ctx.author.mention}, o tempo acabou!")    
 
 # Comando de Avatar
 @bot.command(name='avatar', help='Mostra o avatar de um usuário. Use o comando: !avatar <usuário>')
@@ -450,7 +504,7 @@ async def avatar(ctx, member: discord.Member = None):
 @bot.command(name='meme', help='Envia um meme aleatório')
 async def meme(ctx):
     async with aiohttp.ClientSession() as session:
-        async with session.get('https://meme-api.herokuapp.com/gimme') as response:
+        async with session.get('https://rapidapi.com/collection/meme') as response:
             data = await response.json()
             embed = discord.Embed(title=data['title'], color=discord.Color.purple())
             embed.set_image(url=data['url'])
@@ -464,7 +518,66 @@ async def joke(ctx):
             data = await response.json()
             await ctx.send(f'{data["setup"]} - {data["punchline"]}')
 
-# Inicializar o bot
-# Put your bot token here below
-bot.run('')
 
+# Adicionando o comando para criar o painel de controle
+@bot.command(name="panel", help="Cria um painel de controle para controlar o bot de música.")
+async def control_panel(ctx):
+    # Botões para o painel de controle
+    pause_button = Button(label="Pause", style=ButtonStyle.primary, custom_id="pause")
+    resume_button = Button(label="Resume", style=ButtonStyle.success, custom_id="resume")
+    skip_button = Button(label="Skip", style=ButtonStyle.secondary, custom_id="skip")
+    stop_button = Button(label="Stop", style=ButtonStyle.danger, custom_id="stop")
+
+
+    # Função que será chamada quando o botão de pause for clicado
+    async def pause_callback(interaction):
+        voice_client = ctx.voice_client
+        if voice_client.is_playing():
+            voice_client.pause()
+            await interaction.response.send_message("Música pausada!", ephemeral=True)
+        else:
+            await interaction.response.send_message("Nenhuma música está tocando no momento.", ephemeral=True)
+
+    # Função que será chamada quando o botão de resume for clicado
+    async def resume_callback(interaction):
+        voice_client = ctx.voice_client
+        if voice_client.is_paused():
+            voice_client.resume()
+            await interaction.response.send_message("Música retomada!", ephemeral=True)
+        else:
+            await interaction.response.send_message("Nenhuma música está pausada no momento.", ephemeral=True)
+
+    
+    # Função que será chamada quando o botão de skip for clicado
+    async def skip_callback(interaction):
+        voice_client = ctx.voice_client
+        if voice_client.is_playing():
+            voice_client.stop()
+            await interaction.response.send_message("Música pulada!", ephemeral=True)
+        else:
+            await interaction.response.send_message("Nenhuma música está tocando no momento.", ephemeral=True)
+
+    # Função que será chamada quando o botão de stop for clicado
+    async def stop_callback(interaction):
+        queue.clear()
+        if ctx.voice_client.is_playing():
+            ctx.voice_client.stop()
+        await interaction.response.send_message("Música parada e fila limpa!", ephemeral=True)
+
+    # Atribuir callbacks aos botões
+    pause_button.callback = pause_callback
+    resume_button.callback = resume_callback
+    skip_button.callback = skip_callback
+    stop_button.callback = stop_callback
+
+    # Adicionando os botões ao painel
+    view = View()
+    view.add_item(pause_button)
+    view.add_item(resume_button)
+    view.add_item(skip_button)
+    view.add_item(stop_button)
+
+
+# Inicializar o bot
+
+bot.run("")

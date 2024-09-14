@@ -9,11 +9,7 @@ import aiohttp
 from discord.ui import Button, View  
 from discord import ButtonStyle
 from discord.ui import Select
-import re 
-from nextcord.ext import commands
-import time
-from textblob import TextBlob
-import nextcord
+
 
 # Configurações do bot
 intents = discord.Intents.default()
@@ -318,88 +314,6 @@ async def on_command_error(ctx, error):
         await ctx.send(f'Ocorreu um erro: {error}')
         logger.error(f'Erro no comando: {error}')
 
-votes = {}
-emoji_usage = {}
-user_levels = {}
-sentiments = []
-questions = {
-    "Qual é a capital da França?": "Paris",
-    "Quem descobriu a América?": "Cristóvão Colombo",
-    "Quantos planetas existem no sistema solar?": "8"
-}
-
-# Detecção automática de tópicos e criação de threads
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-
-     # Expressões regulares para detecção de tópicos
-    potential_topics = re.findall(r'\b(novo tópico|nova discussão|sobre)\b', message.content.lower())
-    
-    if potential_topics:
-        thread = await message.create_thread(name=f"Discussão sobre {message.content[:30]}", auto_archive_duration=60)
-        await thread.send("Esta é uma nova thread para discutir esse tópico!")
-    
-    await bot.process_commands(message)
-
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-
-    # Rastrear emojis usados
-    for emoji in message.guild.emojis:
-        if emoji in message.content:
-            if emoji in emoji_usage:
-                emoji_usage[emoji] += 1
-            else:
-                emoji_usage[emoji] = 1
-    
-    # Remover emojis não usados por mais de 30 dias
-    for emoji, last_used in emoji_usage.items():
-        if time.time() - last_used > 30 * 86400:  # 30 dias
-            await message.guild.delete_emoji(emoji)
-
-    await bot.process_commands(message)
-
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-    
-    # Sistema de pontos por mensagens
-    if message.author in user_levels:
-        user_levels[message.author] += 1
-    else:
-        user_levels[message.author] = 1
-    
-    # Desbloquear habilidades a cada 10 níveis
-    if user_levels[message.author] % 10 == 0:
-        role = nextcord.utils.get(message.guild.roles, name="VIP")
-        await message.author.add_roles(role)
-        await message.channel.send(f"Parabéns {message.author.mention}, você subiu de nível e ganhou o cargo VIP!")
-    
-    await bot.process_commands(message)
-
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-
-    # Analisar sentimento da mensagem
-    analysis = TextBlob(message.content)
-    sentiments.append(analysis.sentiment.polarity)
-
-    # Reportar sentimento médio a cada 100 mensagens
-    if len(sentiments) >= 100:
-        avg_sentiment = sum(sentiments) / len(sentiments)
-        admin_channel = nextcord.utils.get(message.guild.text_channels, name="admin")
-        await admin_channel.send(f"O sentimento geral do servidor é {'positivo' if avg_sentiment > 0 else 'negativo'} com uma média de {avg_sentiment:.2f}")
-        sentiments.clear()
-    
-    await bot.process_commands(message)    
-
 # Comando de ajuda personalizado
 @bot.command(name='help', help='Mostra esta mensagem de ajuda')
 async def custom_help(ctx):
@@ -439,34 +353,6 @@ async def custom_help(ctx):
         joke - Envia uma piada aleatória.
     """
     await ctx.send(help_message)
-
-@bot.command(name="quiz")
-async def start_quiz(ctx):
-    question, answer = random.choice(list(questions.items()))
-    await ctx.send(f"Pergunta: {question}")
-    
-    def check(m):
-        return m.author == ctx.author and m.channel == ctx.channel
-
-    response = await bot.wait_for('message', check=check)
-    if response.content.lower() == answer.lower():
-        await ctx.send(f"Parabéns {ctx.author.mention}, você acertou!")
-    else:
-        await ctx.send(f"Errado! A resposta correta era {answer}.")
-
-@bot.command(name="votar")
-async def vote_moderation(ctx, member: nextcord.Member):
-    if member in votes:
-        votes[member] += 1
-    else:
-        votes[member] = 1
-
-    if votes[member] >= 3:  # Threshold de 3 votos para punição
-        role = nextcord.utils.get(ctx.guild.roles, name="Punido")
-        await member.add_roles(role)
-        await ctx.send(f"{member.mention} foi punido pela comunidade!")
-    else:
-        await ctx.send(f"{member.mention} recebeu {votes[member]} votos.")      
 
 # Comando para conectar o bot ao canal de voz
 @bot.command(name='join', help='Conecta o bot ao canal de voz')

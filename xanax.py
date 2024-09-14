@@ -6,9 +6,14 @@ from concurrent.futures import ThreadPoolExecutor
 import logging
 import random
 import aiohttp
-from discord.ui import Button, View
+from discord.ui import Button, View  
 from discord import ButtonStyle
-
+from discord.ui import Select
+import re 
+from nextcord.ext import commands
+import time
+from textblob import TextBlob
+import nextcord
 
 # Configurações do bot
 intents = discord.Intents.default()
@@ -313,6 +318,88 @@ async def on_command_error(ctx, error):
         await ctx.send(f'Ocorreu um erro: {error}')
         logger.error(f'Erro no comando: {error}')
 
+votes = {}
+emoji_usage = {}
+user_levels = {}
+sentiments = []
+questions = {
+    "Qual é a capital da França?": "Paris",
+    "Quem descobriu a América?": "Cristóvão Colombo",
+    "Quantos planetas existem no sistema solar?": "8"
+}
+
+# Detecção automática de tópicos e criação de threads
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+     # Expressões regulares para detecção de tópicos
+    potential_topics = re.findall(r'\b(novo tópico|nova discussão|sobre)\b', message.content.lower())
+    
+    if potential_topics:
+        thread = await message.create_thread(name=f"Discussão sobre {message.content[:30]}", auto_archive_duration=60)
+        await thread.send("Esta é uma nova thread para discutir esse tópico!")
+    
+    await bot.process_commands(message)
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    # Rastrear emojis usados
+    for emoji in message.guild.emojis:
+        if emoji in message.content:
+            if emoji in emoji_usage:
+                emoji_usage[emoji] += 1
+            else:
+                emoji_usage[emoji] = 1
+    
+    # Remover emojis não usados por mais de 30 dias
+    for emoji, last_used in emoji_usage.items():
+        if time.time() - last_used > 30 * 86400:  # 30 dias
+            await message.guild.delete_emoji(emoji)
+
+    await bot.process_commands(message)
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+    
+    # Sistema de pontos por mensagens
+    if message.author in user_levels:
+        user_levels[message.author] += 1
+    else:
+        user_levels[message.author] = 1
+    
+    # Desbloquear habilidades a cada 10 níveis
+    if user_levels[message.author] % 10 == 0:
+        role = nextcord.utils.get(message.guild.roles, name="VIP")
+        await message.author.add_roles(role)
+        await message.channel.send(f"Parabéns {message.author.mention}, você subiu de nível e ganhou o cargo VIP!")
+    
+    await bot.process_commands(message)
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    # Analisar sentimento da mensagem
+    analysis = TextBlob(message.content)
+    sentiments.append(analysis.sentiment.polarity)
+
+    # Reportar sentimento médio a cada 100 mensagens
+    if len(sentiments) >= 100:
+        avg_sentiment = sum(sentiments) / len(sentiments)
+        admin_channel = nextcord.utils.get(message.guild.text_channels, name="admin")
+        await admin_channel.send(f"O sentimento geral do servidor é {'positivo' if avg_sentiment > 0 else 'negativo'} com uma média de {avg_sentiment:.2f}")
+        sentiments.clear()
+    
+    await bot.process_commands(message)    
+
 # Comando de ajuda personalizado
 @bot.command(name='help', help='Mostra esta mensagem de ajuda')
 async def custom_help(ctx):
@@ -352,6 +439,34 @@ async def custom_help(ctx):
         joke - Envia uma piada aleatória.
     """
     await ctx.send(help_message)
+
+@bot.command(name="quiz")
+async def start_quiz(ctx):
+    question, answer = random.choice(list(questions.items()))
+    await ctx.send(f"Pergunta: {question}")
+    
+    def check(m):
+        return m.author == ctx.author and m.channel == ctx.channel
+
+    response = await bot.wait_for('message', check=check)
+    if response.content.lower() == answer.lower():
+        await ctx.send(f"Parabéns {ctx.author.mention}, você acertou!")
+    else:
+        await ctx.send(f"Errado! A resposta correta era {answer}.")
+
+@bot.command(name="votar")
+async def vote_moderation(ctx, member: nextcord.Member):
+    if member in votes:
+        votes[member] += 1
+    else:
+        votes[member] = 1
+
+    if votes[member] >= 3:  # Threshold de 3 votos para punição
+        role = nextcord.utils.get(ctx.guild.roles, name="Punido")
+        await member.add_roles(role)
+        await ctx.send(f"{member.mention} foi punido pela comunidade!")
+    else:
+        await ctx.send(f"{member.mention} recebeu {votes[member]} votos.")      
 
 # Comando para conectar o bot ao canal de voz
 @bot.command(name='join', help='Conecta o bot ao canal de voz')
@@ -408,7 +523,108 @@ async def announce(ctx, channel: discord.TextChannel, *, message: str):
     await channel.send(message)
     await ctx.send(f'Anúncio enviado para {channel.mention}')
 
+# Exibe o painel de controle interativo
+@bot.command(name='painel')
+async def painel(ctx):
+    # Botões do painel de controle
+    button_ban = Button(label="Banir Usuário", style=discord.ButtonStyle.danger, custom_id="ban")
+    button_mute = Button(label="Mutar Usuário", style=discord.ButtonStyle.secondary, custom_id="mute")
+    button_status = Button(label="Status do Bot", style=discord.ButtonStyle.primary, custom_id="status")
+    button_vote = Button(label="Criar Votação", style=discord.ButtonStyle.success, custom_id="vote")
+    button_shutdown = Button(label="Desligar Bot", style=discord.ButtonStyle.danger, custom_id="shutdown")
 
+    # Menu suspenso para customização de status do bot
+    select_status = Select(
+        placeholder="Selecione o Status do Bot...",
+        options=[
+            discord.SelectOption(label="Online", description="Definir como Online"),
+            discord.SelectOption(label="Ausente", description="Definir como Ausente"),
+            discord.SelectOption(label="Não Perturbe", description="Definir como Não Perturbe"),
+            discord.SelectOption(label="Offline", description="Definir como Offline")
+        ],
+        custom_id="status_select"
+    )
+
+    # Criando a view (interface de controle)
+    view = View()
+    view.add_item(button_ban)
+    view.add_item(button_mute)
+    view.add_item(button_status)
+    view.add_item(button_vote)
+    view.add_item(button_shutdown)
+    view.add_item(select_status)
+
+    await ctx.send("😁**Painel de Controle do Bot**", view=view)
+
+# Função de Callbacks para Ações dos Botões
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    # Banir Usuário
+    if interaction.data['custom_id'] == 'ban':
+        await interaction.response.send_message("Por favor, mencione o usuário para banir com !ban @usuário")
+
+    # Mutar Usuário
+    elif interaction.data['custom_id'] == 'mute':
+        await interaction.response.send_message("Por favor, mencione o usuário para mutar com !mute @usuário")
+
+    # Controle de Status do Bot
+    elif interaction.data['custom_id'] == 'status':
+        await interaction.response.send_message("Selecione um status no menu suspenso abaixo.")
+
+    # Criação de Votação
+    elif interaction.data['custom_id'] == 'vote':
+        await interaction.response.send_message("Por favor, use o comando !votacao 'pergunta' 'opção1' 'opção2'.")
+
+    # Desligar o Bot
+    elif interaction.data['custom_id'] == 'shutdown':
+        await interaction.response.send_message("Desligando o bot...")
+        await bot.close()
+
+    # Customização do Status do Bot
+    elif interaction.data['custom_id'] == 'status_select':
+        selected_status = interaction.data['values'][0]
+        if selected_status == "Online":
+            await bot.change_presence(status=discord.Status.online)
+        elif selected_status == "Ausente":
+            await bot.change_presence(status=discord.Status.idle)
+        elif selected_status == "Não Perturbe":
+            await bot.change_presence(status=discord.Status.dnd)
+        else:
+            await bot.change_presence(status=discord.Status.offline)
+        await interaction.response.send_message(f"Status do bot alterado para **{selected_status}**")
+
+# Comando para banir usuários
+@bot.command(name='ban')
+@commands.has_permissions(ban_members=True)
+async def ban(ctx, member: discord.Member, *, reason=None):
+    await member.ban(reason=reason)
+    await ctx.send(f"{member.mention} foi banido por {reason}")
+
+# Comando para mutar usuários
+@bot.command(name='mute')
+@commands.has_permissions(mute_members=True)
+async def mute(ctx, member: discord.Member, duration: int):
+    # A lógica para mutar o usuário por um período pode variar
+    await ctx.send(f"{member.mention} foi mutado por {duration} minutos.")
+
+
+# Comando para iniciar uma votação
+@bot.command(name='votacao')
+async def votacao(ctx, pergunta: str, *opcoes):
+    if len(opcoes) < 2:
+        await ctx.send("Você deve fornecer pelo menos 2 opções para a votação.")
+        return
+
+    # Cria a votação com as opções fornecidas
+    embed = discord.Embed(title="Votação", description=pergunta, color=discord.Color.blue())
+    for idx, opcao in enumerate(opcoes, start=1):
+        embed.add_field(name=f"Opção {idx}", value=opcao, inline=False)
+
+    # Envia a mensagem da votação com reações correspondentes
+    message = await ctx.send(embed=embed)
+    reactions = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
+    for i in range(len(opcoes)):
+        await message.add_reaction(reactions[i])
 
 # Sistema de Boas-vindas
 @bot.event
@@ -580,4 +796,5 @@ async def control_panel(ctx):
 
 # Inicializar o bot
 
-bot.run("")
+bot.run('')
+

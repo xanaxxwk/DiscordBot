@@ -1,5 +1,5 @@
 # Install all librarys to execute this code:
-  # pip instal discord.py asyncio yt_dlp ThreadPoolExecutor logging random aiohttp nextcord youtube_dl
+  # pip install discord.py asyncio yt_dlp ThreadPoolExecutor logging random aiohttp nextcord youtube_dl
 
 
  # How to execute:

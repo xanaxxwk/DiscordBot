@@ -1,6 +1,6 @@
 # Install all librarys to execute this code:
   # pip install discord.py asyncio yt_dlp ThreadPoolExecutor logging random aiohttp nextcord youtube_dl
-
+INSTALL FFMPEG 
 
  # How to execute:
    # python3 <file.py> 

@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+import yt_dlp as youtube_dl
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import logging
@@ -180,7 +181,7 @@ async def skip(ctx):
         await ctx.send("Nenhuma música está tocando no momento.")
 
 # Comando para desconectar o bot
-@bot.command(name='disconnect', help='Desconecta o bot do canal de voz')
+@bot.command(name='quit', help='Desconecta o bot do canal de voz')
 async def disconnect(ctx):
     await ctx.voice_client.disconnect()
     await ctx.send("Bot desconectado do canal de voz!")
@@ -322,7 +323,7 @@ async def custom_help(ctx):
         pause - Pausa a música que está tocando.
         resume - Continua a música que está pausada.
         skip - Pula para a próxima música.
-        disconnect - Desconecta o bot do canal de voz.
+        quit - Desconecta o bot do canal de voz.
         queue <nome da música ou URL> - Adiciona uma música ou playlist à fila.
         show_queue - Mostra as músicas na fila.
         volume <valor de 0 a 100> - Ajusta o volume da música.
@@ -682,4 +683,3 @@ async def control_panel(ctx):
 # Inicializar o bot
 
 bot.run('')
-

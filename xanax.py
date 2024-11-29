@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands
-import yt_dlp as youtube_dl
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import logging

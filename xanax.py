@@ -577,38 +577,40 @@ async def on_command_error(ctx, error):
 async def custom_help(ctx):
     help_message = """
         **Comandos do Bot de Música:**
-        play <nome da música> - Toca uma música do YouTube.
-        pause - Pausa a música que está tocando.
-        resume - Continua a música que está pausada.
-        skip - Pula para a próxima música.
-        quit - Desconecta o bot do canal de voz.
-        queue <nome da música ou URL> - Adiciona uma música ou playlist à fila.
-        show_queue - Mostra as músicas na fila.
-        volume <valor de 0 a 100> - Ajusta o volume da música.
-        stop - Para a música e limpa a fila.
-        loop - Ativa/Desativa o loop da fila.
-        now_playing - Mostra a música que está tocando no momento.
-        move <posição atual> <nova posição> - Move uma música na fila.
-        remove <posição> - Remove uma música da fila.
-        search <termo de busca> - Busca músicas no YouTube.
-        queue_search <número> - Adiciona uma música da busca à fila.
-        join - Conecta o bot ao canal de voz.
+        `!play` <nome da música> - Toca uma música do YouTube.
+        `!pause` - Pausa a música que está tocando.
+        `!resume` - Continua a música que está pausada.
+        `!skip` - Pula para a próxima música.
+        `!quit` - Desconecta o bot do canal de voz.
+        `!queue` <nome da música ou URL> - Adiciona uma música ou playlist à fila.
+        `!show_queue` - Mostra as músicas na fila.
+        `!volume` <valor de 0 a 100> - Ajusta o volume da música.
+        `!stop` - Para a música e limpa a fila.
+        `!loop` - Ativa/Desativa o loop da fila.
+        `!now_playing` - Mostra a música que está tocando no momento.
+        `!move` <posição atual> <nova posição> - Move uma música na fila.
+        `!remove` <posição> - Remove uma música da fila.
+        `!search` <termo de busca> - Busca músicas no YouTube.
+        `!queue_search` <número> - Adiciona uma música da busca à fila.
+        `!join` - Conecta o bot ao canal de voz.
         
         **Outros Comandos:**
-        ping - Verifica a latência do bot.
-        serverinfo - Mostra informações sobre o servidor.
-        userinfo <usuário> - Mostra informações sobre um usuário.
-        clear <número> - Limpa um número específico de mensagens.
-        announce <canal> <mensagem> - Faz um anúncio em um canal específico.
-        welcome <mensagem> - Define uma mensagem de boas-vindas.
-        goodbye <mensagem> - Define uma mensagem de despedida.
-        level - Mostra o nível do usuário.
-        giveaway <prêmio> - Realiza um sorteio.
-        poll <pergunta> <opções> - Cria uma enquete.
-        timer <tempo> - Define um temporizador.
-        avatar <usuário> - Mostra o avatar de um usuário.
-        meme - Envia um meme aleatório.
-        joke - Envia uma piada aleatória.
+        `!ping` - Verifica a latência do bot.
+        `!serverinfo` - Mostra informações sobre o servidor.
+        `!userinfo` <usuário> - Mostra informações sobre um usuário.
+        `!clear` <número> - Limpa um número específico de mensagens.
+        `!announce` <canal> <mensagem> - Faz um anúncio em um canal específico.
+        `!welcome` <mensagem> - Define uma mensagem de boas-vindas.
+        `!goodbye` <mensagem> - Define uma mensagem de despedida.
+        `!level` - Mostra o nível do usuário.
+        `!giveaway` <prêmio> - Realiza um sorteio.
+        `!poll` <pergunta> <opções> - Cria uma enquete.
+        `!timer` <tempo> - Define um temporizador.
+        `!avatar` <usuário> - Mostra o avatar de um usuário.
+        `!meme` - Envia um meme aleatório.
+        `!joke` - Envia uma piada aleatória.
+        `!qrcode` <texto> - Gera um qrcode com o texto fornecido.
+        `!pix <chave_pix [valor]` - Gera um QR Code para pagamento via PIX.
     """
     await ctx.send(help_message)
 

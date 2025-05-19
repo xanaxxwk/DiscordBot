@@ -9,8 +9,12 @@ import aiohttp
 from discord.ui import Button, View  
 from discord import ButtonStyle
 from discord.ui import Select
+import time
+import json
 
 
+GUILDFILEJSON = "guild_configs.json"
+PLAYLISTFILEJSON = "playlists.json"
 # Configurações do bot
 intents = discord.Intents.default()
 intents.message_content = True
@@ -77,9 +81,144 @@ class YTDLSource(discord.PCMVolumeTransformer):
             sources.append(cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=entry))
         return sources
 
-# Fila de músicas
-queue = []
-loop_queue = False
+# Classes de gerenciamento 
+
+class MusicQueue:
+    def __init__(self):
+        self._queue = []
+        self.loop = False # Loop para toda a fila 
+        self.loop_single = False # Loop para a musica atual
+        self.current_song = None
+
+    def add(self, item):
+        self._queue.append(item)
+
+    def next(self):
+        if self.loop_single and self.current_song:
+            return self.current_song
+        if self.loop and self.current_song:
+            self._queue.append(self.current_song)
+        return self._queue.pop(0) if self._queue else None
+
+    def clear(self):
+        self._queue.clear()
+
+    def remove(self, index):
+        if 0 <= index < len(self._queue):
+            return self._queue.pop(index)
+        return None
+
+    def move(self, from_index, to_index):
+        if 0 <= from_index < len(self._queue) and 0 <= to_index < len(self._queue):
+            item = self._queue.pop(from_index)
+            self._queue.insert(to_index, item)
+            return True 
+        return False
+
+    def __len__(self):
+        return len(self._queue)
+
+    def __getitem__(self, index):
+        return self._queue[index]
+
+    def __iter__(self):
+        return iter(self._queue) 
+    
+class SearchCache():
+    def __init__(self):
+        self.cache = {}
+        self._expiry_time = 300
+
+    def add(self, ctx, results):
+        self._cache[ctx.author.id] = {
+            'results': results,
+            'timestamp': time.time()
+        }
+
+    def get(self, ctx):
+        if ctx.author.id in self.cache:
+            cached = self._cache[ctx.author.id]
+            if time.time() - cached['timestamp'] < self._expiry_time:
+                return cached['results']
+            del self._cache[ctx.author.id]
+        return None
+    
+    def clear(self, ctx):
+        if ctx.author.id in self._cache:
+            del self._cache[ctx.author.id]
+
+class GuildConfig():
+    def __init__(self):
+        self._configs = {}
+
+    def get(self, guild_id, key, default=None):
+        if str(guild_id) not in self._configs:
+            return default
+        return self._configs[str(guild_id)].get(key, default)
+
+    def set(self, guild_id, key, value):
+        if str(guild_id) not in self._configs:
+            self._configs[str(guild_id)] = {}
+        self._configs[str(guild_id)][key] = value
+
+    def save(self):
+        with open(GUILDFILEJSON, 'w') as f:
+            json.dump(self._configs, f)
+
+    def load(self):
+        try:
+            with open(GUILDFILEJSON, 'r') as f:
+                self._configs = json.load(f)
+        except FileNotFoundError:
+            self._configs = {}
+
+class PlaylistManager():
+    def __init__(self):
+        self._playlists = {}
+        self.load()
+    
+    def load(self):
+        try:
+            with open(PLAYLISTFILEJSON, 'r') as f:
+                self._playlists = json.load(f)
+            
+        except FileNotFoundError:
+            self._playlists = {}
+
+    def save(self):
+        with open(PLAYLISTFILEJSON, 'w') as f:
+            json.dump(self._playlists, f)
+
+    def create_playlist(self, user_id, name):
+        if str(user_id) not in self._playlists:
+            self._playlists[str(user_id)] = {} 
+        if name in self._playlists[str(user_id)]:
+            return False
+        self._playlists[str(user_id)][name] = []
+        self.save()
+        return True
+
+    def add_to_playlist(self, user_id, name, url):
+        if str(user_id) not in self._playlists or name not in self._playlists[str(user_id)]:
+            return False
+        self._playlists[str(user_id)][name].append(url)
+        self.save()
+        return True
+
+    def get_playlist(self, user_id, name):
+        if str(user_id) not in self._playlists or name not in self._playlists[str(user_id)]:
+            return None
+        return self._playlists[str(user_id)][name]
+
+    def list_playlists(self, user_id):
+        if str(user_id) not in self._playlists:
+            return []
+        return list(self._playlists[str(user_id)].keys())    
+
+
+queue = MusicQueue()
+search_cache = SearchCache()
+guild_config = GuildConfig()
 
 # Executor para multithreading
 executor = ThreadPoolExecutor(max_workers=64)
@@ -91,8 +230,17 @@ logger = logging.getLogger(__name__)
 # Painel de Controle com botões
 class MusicControlView(discord.ui.View):
     def __init__(self, ctx):
-        super().__init__()
+        super().__init__(timeout=180)
         self.ctx = ctx
+
+    async def interaction_check(self, interaction):
+        if interaction.user != self.ctx.author:
+            await interaction.response.send_message(
+                "Apenas quem usoiu o comando pode controlar!",
+                ephemeral=True
+                )
+            return False
+        return True
 
     @discord.ui.button(label='⏯️ Play/Pause', style=discord.ButtonStyle.green)
     async def play_pause(self, button: discord.ui.Button, interaction: discord.Interaction):
@@ -120,7 +268,7 @@ class MusicControlView(discord.ui.View):
             await interaction.response.send_message("⏹️ Música parada e desconectado do canal de voz!", ephemeral=True)
 
 # Comando para tocar música
-@bot.command(name='play', help='Toca uma música do YouTube. Use o comando: !play <nome da música>')
+@bot.command(name='play', aliases=['p'], help='Toca uma música do YouTube. Use o comando: !play <nome da música>')
 async def play(ctx, *, query: str):
     try:
         if not ctx.author.voice:
@@ -286,9 +434,17 @@ async def queue_search(ctx, index: int):
     else:
         await ctx.send("Índice inválido ou nenhum resultado de busca disponível.")
 
+@bot.command(name="nowplaying", aliases=['np'])
+async def now_playing(ctx):
+    """Mostra a musica que esta tocando agora."""
+    if queue.current_song:
+        await ctx.send(f"♪ Tocando agora: **{queue.current_song.title}")
+    else:
+        await ctx.send("✖ Nenhuma musica esta tocando.") 
+
 # Desconectar automaticamente após um período de inatividade
 async def auto_disconnect(ctx):
-    await asyncio.sleep(30)  # 1 minutos
+    await asyncio.sleep(30)  # 1 minuto
     if not ctx.voice_client.is_playing():
         await ctx.voice_client.disconnect()
         await ctx.send("Desconectado por inatividade.")

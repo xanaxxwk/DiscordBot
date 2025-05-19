@@ -81,7 +81,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
             sources.append(cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=entry))
         return sources
 
-# Classes de gerenciamento 
+# Classes de Gerenciamento 
 
 class MusicQueue:
     def __init__(self):

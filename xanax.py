@@ -12,7 +12,11 @@ from discord.ui import Select
 import time
 import json
 from datetime import datetime, timedelta
-
+import aiohttp
+import qrcode
+from io import BytesIO
+import os 
+from dotenv import load_dotenv
 
 GUILDFILEJSON = "guild_configs.json"
 PLAYLISTFILEJSON = "playlists.json"
@@ -20,6 +24,10 @@ PLAYLISTFILEJSON = "playlists.json"
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True  # Necessário para eventos de membros
+
+# Carrega o token do .env
+load_dotenv()
+TOKEN = os.getenv('token.env')
 
 class MyBot(commands.Bot):
     async def setup_hook(self):
@@ -269,7 +277,13 @@ executor = ThreadPoolExecutor(max_workers=64)
 
 # Configuração de logs
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('discord')
+logger.setLevel(logging.INFO)
+
+handler = logging.FileHandler(filename='bot.log', encoding='utf-8', mode='w')
+handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s: %(message)s'))
+
+logger.addHandler(handler)
 
 # Painel de Controle com botões
 class MusicControlView(discord.ui.View):
@@ -486,6 +500,48 @@ async def now_playing(ctx):
     else:
         await ctx.send("✖ Nenhuma musica esta tocando.") 
 
+# Comandos diversos
+@bot.command()
+async def meme(ctx):
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://meme-api.com/gimme') as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                await ctx.send(data['url'])
+            else:
+                await ctx.send("Não foi possivel obter um meme no momento.")
+
+@bot.command()
+async def qrcode(ctx, *, texto):
+    img = qrcode.make(texto)
+    buffer = BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    await ctx.send(file=discord.File(fp=buffer, filename="qr-code.png"))
+
+# Função para gerar pix qr code
+def gerar_pix_qr(chave, valor, nome, cidade):
+    payload = (
+        f"00020126410014BR.GOV.BCB.PIX01{len(chave):02}{chave}"
+        f"520400005303986540{len(f'{valor:.2f}'):02}{valor:.2f}"
+        f"5802BR5913{nome[:13]:<13}6008{cidade[:8]:<8}62070503***6304"
+    )
+    img = qrcode.make(payload)
+    buffer = BytesIO()
+    img.save(buffer, format='PNG')
+    buffer.seek(0)
+    return buffer
+
+@bot.command()
+async def pix(ctx, chave):
+    valor = 1.00
+    nome = "Nome"
+    cidade = "Cidade"
+
+    img_buffer = gerar_pix_qr(chave, valor, nome, cidade)
+    await ctx.send(f"QR Code de pagamento Pix para `{chave}` no valor de R${valor:.2f}:",
+                   file=discord.File(fp=img_buffer, filename="pix.png"))
+
 # Desconectar automaticamente após um período de inatividade
 async def auto_disconnect(ctx):
     await asyncio.sleep(30)  # 1 minuto
@@ -510,12 +566,14 @@ async def check_voice_connection():
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         await ctx.send('Comando não encontrado. Use !help para ver a lista de comandos.')
+    elif isinstance(error, commands.CommandNotFound):
+        await ctx.send("Comando nao encontrado.")
     else:
         await ctx.send(f'Ocorreu um erro: {error}')
-        logger.error(f'Erro no comando: {error}')
+        raise error
 
 # Comando de ajuda personalizado
-@bot.command(name='help', help='Mostra esta mensagem de ajuda')
+@bot.command(name='help', aliases=['hp'], help='Mostra esta mensagem de ajuda')
 async def custom_help(ctx):
     help_message = """
         **Comandos do Bot de Música:**
@@ -880,6 +938,5 @@ async def control_panel(ctx):
     view.add_item(stop_button)
 
 
-# Inicializar o bot
 
-bot.run('')
+

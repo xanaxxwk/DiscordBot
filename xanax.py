@@ -11,6 +11,7 @@ from discord import ButtonStyle
 from discord.ui import Select
 import time
 import json
+from datetime import datetime, timedelta
 
 
 GUILDFILEJSON = "guild_configs.json"
@@ -88,6 +89,33 @@ class MusicCache:
     def __init__(self):
         self._search_cache = {}
         self._lyrics_cache = {}
+        self._expire_time = timedelta(minutes=30)
+
+    async def get_or_create(self, key, creator):
+        """Obtem do cache ou cria novo item
+        """
+        if cached := self._get_from_cache(key):
+            return cached
+        
+        created = await creator()
+        self._add_to_cache(key, created)
+        return created
+    
+    def _get_from_cache(self, key):
+        """Busca no cache com verificacao de expiracao
+        """
+        if key not in self._cache:
+            return None
+        item, timestamp = self._cache[key]
+        if datetime.now() - timestamp > self._expire_time:
+            del self._cache[key]
+            return None
+        return item 
+    
+    def _add_to_cache(self, key, item):
+        """Adiciona item ao cache
+        """
+        self._cache[key] = (item, datetime.now())
 
     async def get_or_search(self, query, search_fn):
         if query in self._search_cache:

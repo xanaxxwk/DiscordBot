@@ -219,6 +219,7 @@ class PlaylistManager():
 queue = MusicQueue()
 search_cache = SearchCache()
 guild_config = GuildConfig()
+playlist_manager = PlaylistManager()
 
 # Executor para multithreading
 executor = ThreadPoolExecutor(max_workers=64)
@@ -290,7 +291,7 @@ async def play(ctx, *, query: str):
         print(f'Erro ao tentar tocar música: {e}')
 
 # Comando para sair do canal de voz
-@bot.command(name='leave', help='Desconecta o bot do canal de voz.')
+@bot.command(name='leave', aliases=['l'], help='Desconecta o bot do canal de voz.')
 async def leave(ctx):
     if not ctx.voice_client:
         return await ctx.send("Não estou conectado a um canal de voz.")
@@ -299,7 +300,7 @@ async def leave(ctx):
     await ctx.send("Bot desconectado do canal de voz.")
 
 # Comando para pausar a música
-@bot.command(name='pause', help='Pausa a música que está tocando')
+@bot.command(name='pause', aliases=['p'], help='Pausa a música que está tocando')
 async def pause(ctx):
     voice_client = ctx.voice_client
     if voice_client.is_playing():
@@ -309,7 +310,7 @@ async def pause(ctx):
         await ctx.send("Nenhuma música está tocando no momento.")
 
 # Comando para continuar a música pausada
-@bot.command(name='resume', help='Continua a música que está pausada')
+@bot.command(name='resume', aliases=['re'], help='Continua a música que está pausada')
 async def resume(ctx):
     voice_client = ctx.voice_client
     if voice_client.is_paused():
@@ -319,7 +320,7 @@ async def resume(ctx):
         await ctx.send("Nenhuma música está pausada no momento.")
 
 # Comando para pular a música atual
-@bot.command(name='skip', help='Pula para a próxima música')
+@bot.command(name='skip', aliases=['sk'], help='Pula para a próxima música')
 async def skip(ctx):
     voice_client = ctx.voice_client
     if voice_client.is_playing():
@@ -329,13 +330,13 @@ async def skip(ctx):
         await ctx.send("Nenhuma música está tocando no momento.")
 
 # Comando para desconectar o bot
-@bot.command(name='quit', help='Desconecta o bot do canal de voz')
+@bot.command(name='quit', aliases=['qt'], help='Desconecta o bot do canal de voz')
 async def disconnect(ctx):
     await ctx.voice_client.disconnect()
     await ctx.send("Bot desconectado do canal de voz!")
 
 # Comando para adicionar música à fila
-@bot.command(name='queue', help='Adiciona uma música ou playlist à fila. Use o comando: !queue <nome da música ou URL>')
+@bot.command(name='queue', aliases=['qu'], help='Adiciona uma música ou playlist à fila. Use o comando: !queue <nome da música ou URL>')
 async def add_to_queue(ctx, *, query: str):
     async with ctx.typing():
         sources = await YTDLSource.from_url(query, loop=bot.loop, stream=True)
@@ -343,7 +344,7 @@ async def add_to_queue(ctx, *, query: str):
     await ctx.send(f'{len(sources)} música(s) adicionada(s) à fila!')
 
 # Comando para mostrar a fila
-@bot.command(name='show_queue', help='Mostra as músicas na fila')
+@bot.command(name='show_queue', aliases=['sq'], help='Mostra as músicas na fila')
 async def show_queue(ctx):
     if queue:
         message = "\n".join([f'{i+1}. {source.title}' for i, source in enumerate(queue)])

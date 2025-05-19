@@ -30,13 +30,14 @@ bot = MyBot(command_prefix='!', intents=intents)
 bot.remove_command('help')
 
 # Configuração do YouTube DL
+
 ytdl_format_options = {
     'format': 'bestaudio/best',
     'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
     'noplaylist': False,  # Permitir playlists
     'nocheckcertificate': True,
-    'ignoreerrors': False,
+    'ignoreerrors': True,
     'logtostderr': False,
     'quiet': True,
     'no_warnings': True,
@@ -44,7 +45,7 @@ ytdl_format_options = {
     'source_address': '0.0.0.0'  # Necessário se tiver problemas de IP
 }
 
-ffmpeg_options = {
+FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn'
 }
@@ -65,7 +66,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         if 'entries' in data:
             data = data['entries'][0]
         filename = data['url'] if stream else ytdl.prepare_filename(data)
-        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+        return cls(discord.FFmpegPCMAudio(filename, **FFMPEG_OPTIONS), data=data)
 
     @classmethod
     async def from_url(cls, url, *, loop=None, stream=False):
@@ -78,10 +79,23 @@ class YTDLSource(discord.PCMVolumeTransformer):
         sources = []
         for entry in data:
             filename = entry['url'] if stream else ytdl.prepare_filename(entry)
-            sources.append(cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=entry))
+            sources.append(cls(discord.FFmpegPCMAudio(filename, **FFMPEG_OPTIONS), data=entry))
         return sources
 
 # Classes de Gerenciamento 
+
+class MusicCache:
+    def __init__(self):
+        self._search_cache = {}
+        self._lyrics_cache = {}
+
+    async def get_or_search(self, query, search_fn):
+        if query in self._search_cache:
+            return self._search_cache[query]
+        
+        results = await search_fn(query)
+        self._search_cache[query] = results
+        return results
 
 class MusicQueue:
     def __init__(self):
@@ -220,6 +234,7 @@ queue = MusicQueue()
 search_cache = SearchCache()
 guild_config = GuildConfig()
 playlist_manager = PlaylistManager()
+music_cache = MusicCache()
 
 # Executor para multithreading
 executor = ThreadPoolExecutor(max_workers=64)

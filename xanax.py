@@ -13,13 +13,14 @@ import time
 import json
 from datetime import datetime, timedelta
 import aiohttp
-import qrcode
+import qrcode 
 from io import BytesIO
 import os 
 from dotenv import load_dotenv
 
+
 GUILDFILEJSON = "guild_configs.json"
-PLAYLISTFILEJSON = "playlists.json"
+PLAYLISTFILEJSON = "playlists.json" 
 # Configurações do bot
 intents = discord.Intents.default()
 intents.message_content = True
@@ -136,7 +137,7 @@ class MusicCache:
 class MusicQueue:
     def __init__(self):
         self._queue = []
-        self.loop = False # Loop para toda a fila 
+        self.loop = False # Loop para toda a fila
         self.loop_single = False # Loop para a musica atual
         self.current_song = None
 
@@ -937,7 +938,7 @@ async def control_panel(ctx):
     view.add_item(pause_button)
     view.add_item(resume_button)
     view.add_item(skip_button)
-    view.add_item(stop_button)
+    view.add_item(stop_button)  
 
 
 
